@@ -28,6 +28,7 @@ const (
     S3Region = "eu-central-1"
     S3Bucket = "pl.rrj.icm-polly"
     LinkExpiration = 180
+    Voice = "Maja"
 )
 
 /* Paragraph TODO */
@@ -55,11 +56,8 @@ func main() {
     if err != nil {
         log.Println("Error: ", err)
     }
-
-    r := bytes.NewReader(body)
-
     // Create a goquery document from the HTTP response
-    document, err := goquery.NewDocumentFromReader(r)
+    document, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
     if err != nil {
         log.Println("Error loading HTTP response body. ", err)
     }
@@ -75,16 +73,14 @@ func main() {
     // compute signature
     h := sha1.New()
     h.Write([]byte(komentarz))
-    bs := h.Sum(nil)
-    k.Hash = fmt.Sprintf("%x", bs)
+    k.Hash = fmt.Sprintf("%x", h.Sum(nil))
     log.Println(k.Hash)
     k.Timestamp = time.Now().Unix()
     k.Valid = LinkExpiration * 60 + k.Timestamp
     // extract urls
     k.Urls = xurls.Relaxed().FindAllString(komentarz, -1)
     log.Println(k.Urls)
-    // Initialize a session that the SDK uses to load
-    // credentials from the shared credentials file. (~/.aws/credentials).
+    // Initialize AWS Session
     sess := session.Must(session.NewSessionWithOptions(session.Options{
         SharedConfigState: session.SharedConfigEnable,
     }))
@@ -93,7 +89,7 @@ func main() {
     // Split into paragraphs
     paragraphs := strings.Split(komentarz, "\n")
     // create filename (prefix + hash
-    fn := fmt.Sprintf("icm_%x", bs)
+    fn := fmt.Sprintf("icm_%x", k.Hash)
     // Upload komentarz
     err = addTextToS3(sess, komentarz, fn + ".txt")
     if err != nil {
@@ -114,10 +110,8 @@ func main() {
             continue
         }
         log.Println(p)
-
         // Output to MP3 using voice Maja (PL)
-        input := &polly.SynthesizeSpeechInput{OutputFormat: aws.String("mp3"), Text: aws.String(p), VoiceId: aws.String("Maja")}
-
+        input := &polly.SynthesizeSpeechInput{OutputFormat: aws.String("mp3"), Text: aws.String(p), VoiceId: aws.String(Voice)}
         output, err := svc.SynthesizeSpeech(input)
         if err != nil {
             log.Println("Got error when calling SynthesizeSpeech:")

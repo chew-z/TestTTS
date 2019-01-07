@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/dmulholland/janus-go/janus"
@@ -30,13 +32,15 @@ Quick and dirty crawler for peeking into HTML elements using goquery
 Arguments: URL          URL to scrap.
 
 Options:
--g, --goquery <query>   goquery expression.
+-g, --goquery <query>   goquery expression (a'la jQuery #, . ).
 -o, --out <path>        Output filename. Defaults to 'output.txt'.
+-n <int>                If multiple elements match select n-th. (-1) for all.
 
 Flags:
 -d, --document          Print nodes of entire document.
 -t, --tree              Print nodes of selected element.
 -l, --link              Extract links from document.
+-p, process             Process result with internal function (clean, regex).
 -h, --help              Display this help text and exit.
 -v, --version           Display the application's version number and exit.
 `, filepath.Base(os.Args[0]))
@@ -45,6 +49,7 @@ func main() {
 	url := "http://www.meteo.pl/komentarze/index1.php"
 	gq := ""
 	fn := "output.txt"
+	var sb strings.Builder
 	// Parse the command line arguments.
 	parser := janus.NewParser()
 	parser.Helptext = helptext
@@ -55,6 +60,7 @@ func main() {
 	parser.NewFlag("tree t")
 	parser.NewFlag("document d")
 	parser.NewFlag("links l")
+	parser.NewFlag("process p")
 	parser.Parse()
 
 	// Get url
@@ -80,6 +86,7 @@ func main() {
 	tree := parser.GetFlag("tree")
 	dee := parser.GetFlag("document")
 	links := parser.GetFlag("links")
+	proc := parser.GetFlag("process")
 
 	body, err := fetchUtf8Bytes(url)
 	if err != nil {
@@ -93,47 +100,83 @@ func main() {
 	}
 	// Entire document tree
 	if dee {
-		fmt.Println("---")
+		var nHtml string
+		sb.WriteString("---")
 		document.Find("*").Each(func(_ int, node *goquery.Selection) {
-			fmt.Println("---")
-			fmt.Println(node.Html())
-			fmt.Println("---")
+			sb.WriteString("---")
+			nHtml, _ = node.Html()
+			sb.WriteString(nHtml)
+			sb.WriteString("---")
 		})
-		fmt.Println("---")
+		sb.WriteString("---")
+		saveTofile(fn, sb.String())
+		fmt.Println(sb.String())
 		os.Exit(0)
 	}
 	// All elements matching query - HTML and text
 	if tree {
-		fmt.Println("---")
+		var nHtml string
+		sb.WriteString("---")
 		document.Find(gq).Each(func(_ int, node *goquery.Selection) {
-			fmt.Println("---")
-			fmt.Println(node.Html())
-			fmt.Println(node.Text())
-			fmt.Println("---")
+			sb.WriteString("---")
+			nHtml, _ = node.Html()
+			sb.WriteString(nHtml)
+			sb.WriteString(node.Text())
+			sb.WriteString("---")
 		})
-		fmt.Println("---")
+		sb.WriteString("---")
+		saveTofile(fn, sb.String())
+		fmt.Println(sb.String())
 		os.Exit(0)
 	}
 	// extract urls from elements matching query
 	if links {
+		var links []string
 		document.Find(gq).Each(func(_ int, node *goquery.Selection) {
-			fmt.Println(xurls.Relaxed().FindAllString(node.Text(), -1))
+			links = xurls.Relaxed().FindAllString(node.Text(), -1)
+			for _, l := range links {
+				sb.WriteString(l)
+			}
 		})
+		saveTofile(fn, sb.String())
+		fmt.Println(sb.String())
 		os.Exit(0)
 	}
-	element := document.Find(gq)
+	elements := document.Find(gq)
 	if n > -1 {
-		element = element.Eq(n)
+		text := elements.Eq(n).Text()
+		if proc {
+			text = process(text)
+		}
+		sb.WriteString(text)
+		// Save to file
+		saveTofile(fn, sb.String())
+		fmt.Println(sb.String())
+		os.Exit(0)
+	} else {
+		elements.Each(func(i int, s *goquery.Selection) {
+			if proc {
+				sb.WriteString(process(s.Text()))
+			} else {
+				sb.WriteString(s.Text())
+			}
+		})
+		// Save to file
+		saveTofile(fn, sb.String())
+		fmt.Println(sb.String())
+		os.Exit(0)
 	}
-	text := element.Text()
-	fmt.Println(text)
 
-	// Save to file
-	err = ioutil.WriteFile(fn, []byte(text), 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
+}
 
+func process(in string) string {
+	var out string
+	re := regexp.MustCompile(`(?m)^\s*$`)
+	// re := regexp.MustCompile("(?m)^\\s*$[\r\n]*")
+	// text = strings.TrimSpace(text)
+	out = strings.Trim(re.ReplaceAllString(in, ""), "\r\n")
+	out = out + ".\n"
+	return out
 }
 
 // ICM is using ISO-8859-2
@@ -150,4 +193,11 @@ func fetchUtf8Bytes(url string) ([]byte, error) {
 	}
 
 	return ioutil.ReadAll(utf8reader)
+}
+
+func saveTofile(fn string, text string) {
+	err := ioutil.WriteFile(fn, []byte(text), 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

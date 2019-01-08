@@ -156,7 +156,9 @@ func main() {
 	} else {
 		elements.Each(func(i int, s *goquery.Selection) {
 			if proc {
-				sb.WriteString(process(s.Text()))
+				sb.WriteString("<speak>")
+				sb.WriteString(makeSSML(process(s.Text())))
+				sb.WriteString("</speak>\n")
 			} else {
 				sb.WriteString(s.Text())
 			}
@@ -171,11 +173,20 @@ func main() {
 
 func process(in string) string {
 	var out string
-	re := regexp.MustCompile(`(?m)^\s*$`)
+	re1 := regexp.MustCompile(`(?m)^\s*$`)
+	re2 := regexp.MustCompile(`\s*(zobacz więcej »|zobacz więcej  »|Zobacz TOTERAZ|czytaj dalej  »)`)
 	// re := regexp.MustCompile("(?m)^\\s*$[\r\n]*")
 	// text = strings.TrimSpace(text)
-	out = strings.Trim(re.ReplaceAllString(in, ""), "\r\n")
-	out = out + ".\n"
+	out = strings.Trim(re1.ReplaceAllString(in, ""), "\r\n")
+	out = strings.TrimSpace(re2.ReplaceAllString(out, "<break strength='x-strong'/>"))
+	out = out + "."
+	return out
+}
+
+func makeSSML(in string) string {
+	var out string
+	// out = "<amazon:auto-breaths frequency='low' volume='soft' duration='x-short'>" + in + "</amazon:auto-breaths><break strength='x-strong'/>"
+	out = "<amazon:auto-breaths frequency='low' volume='soft' duration='short'><p>" + in + "</p></amazon:auto-breaths>"
 	return out
 }
 

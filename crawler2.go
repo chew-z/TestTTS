@@ -146,48 +146,63 @@ func main() {
 	if n > -1 {
 		text := elements.Eq(n).Text()
 		if proc {
-			text = process(text)
+			text = cleanText(text)
 		}
 		sb.WriteString(text)
-		// Save to file
-		saveTofile(fn, sb.String())
-		fmt.Println(sb.String())
-		os.Exit(0)
 	} else {
 		elements.Each(func(i int, s *goquery.Selection) {
 			if proc {
-				sb.WriteString("<speak>")
-				sb.WriteString(makeSSML(process(s.Text())))
-				sb.WriteString("</speak>\n")
+				// log.Printf("+>%s<+", s.Text())
+				// log.Printf("=>%s<=", cleanText(s.Text()))
+				sb.WriteString(cleanText(s.Text()))
 			} else {
 				sb.WriteString(s.Text())
 			}
 		})
-		// Save to file
-		saveTofile(fn, sb.String())
-		fmt.Println(sb.String())
-		os.Exit(0)
 	}
-
+	paragraphs := strings.Split(sb.String(), "\n")
+	sb.Reset()
+	for _, p := range paragraphs {
+		if len([]rune(p)) < 4 {
+			continue
+		}
+		// log.Printf("-->%s<--", p)
+		ssml := makeSSML(p)
+		// log.Println(ssml)
+		sb.WriteString(ssml)
+		sb.WriteString("\n")
+	} // Save to file
+	saveTofile(fn, sb.String())
+	fmt.Println(sb.String())
+	os.Exit(0)
 }
 
-func process(in string) string {
+func cleanText(in string) string {
 	var out string
-	re1 := regexp.MustCompile(`(?m)^\s*$`)
-	re2 := regexp.MustCompile(`\s*(zobacz więcej »|zobacz więcej  »|Zobacz TOTERAZ|czytaj dalej  »)`)
-	// re := regexp.MustCompile("(?m)^\\s*$[\r\n]*")
-	// text = strings.TrimSpace(text)
-	out = strings.Trim(re1.ReplaceAllString(in, ""), "\r\n")
-	out = strings.TrimSpace(re2.ReplaceAllString(out, "<break strength='x-strong'/>"))
-	out = out + "."
+	// https://github.com/google/re2/wiki/Syntax
+	re1 := regexp.MustCompile(`(?m)[[:blank:]]{2,}`) // multiple whitespace
+	re2 := regexp.MustCompile(`(»|zobacz więcej|Zobacz TOTERAZ|czytaj dalej)`)
+	// dots followed by sentence not separated by space
+	re3 := regexp.MustCompile(`(\.)([[:upper:]])`)
+	out = re1.ReplaceAllString(in, "")
+	out = re2.ReplaceAllString(out, "")
+	out = re3.ReplaceAllString(out, "$1 $2")
+	out = out + "\n"
 	return out
 }
 
+// Make SSML from paragraph, short sentence
 func makeSSML(in string) string {
-	var out string
-	// out = "<amazon:auto-breaths frequency='low' volume='soft' duration='x-short'>" + in + "</amazon:auto-breaths><break strength='x-strong'/>"
-	out = "<amazon:auto-breaths frequency='low' volume='soft' duration='short'><p>" + in + "</p></amazon:auto-breaths>"
-	return out
+	var sb strings.Builder
+	sb.WriteString("<speak>")
+	sb.WriteString("<amazon:auto-breaths frequency='low' volume='medium' duration='medium'>")
+	sb.WriteString("<p>")
+	sb.WriteString(in)
+	sb.WriteString("</p>")
+	sb.WriteString("</amazon:auto-breaths>")
+	sb.WriteString("</speak>")
+
+	return sb.String()
 }
 
 // ICM is using ISO-8859-2

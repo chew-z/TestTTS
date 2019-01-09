@@ -100,12 +100,12 @@ func main() {
 	}
 	// Entire document tree
 	if dee {
-		var nHtml string
+		var nHTML string
 		sb.WriteString("---")
 		document.Find("*").Each(func(_ int, node *goquery.Selection) {
 			sb.WriteString("---")
-			nHtml, _ = node.Html()
-			sb.WriteString(nHtml)
+			nHTML, _ = node.Html()
+			sb.WriteString(nHTML)
 			sb.WriteString("---")
 		})
 		sb.WriteString("---")
@@ -115,12 +115,12 @@ func main() {
 	}
 	// All elements matching query - HTML and text
 	if tree {
-		var nHtml string
+		var nHTML string
 		sb.WriteString("---")
 		document.Find(gq).Each(func(_ int, node *goquery.Selection) {
 			sb.WriteString("---")
-			nHtml, _ = node.Html()
-			sb.WriteString(nHtml)
+			nHTML, _ = node.Html()
+			sb.WriteString(nHTML)
 			sb.WriteString(node.Text())
 			sb.WriteString("---")
 		})
@@ -187,6 +187,7 @@ func cleanText(in string) string {
 	out = re1.ReplaceAllString(in, "")
 	out = re2.ReplaceAllString(out, "")
 	out = re3.ReplaceAllString(out, "$1 $2")
+	out = strings.TrimSpace(out)
 	out = out + "\n"
 	return out
 }
@@ -195,11 +196,12 @@ func cleanText(in string) string {
 func makeSSML(in string) string {
 	var sb strings.Builder
 	sb.WriteString("<speak>")
-	sb.WriteString("<amazon:auto-breaths frequency='low' volume='medium' duration='medium'>")
+	// sb.WriteString("<amazon:auto-breaths frequency='low' volume='medium' duration='medium'>")
 	sb.WriteString("<p>")
 	sb.WriteString(in)
+	sb.WriteString("<break strength='x-strong'>")
 	sb.WriteString("</p>")
-	sb.WriteString("</amazon:auto-breaths>")
+	// sb.WriteString("</amazon:auto-breaths>")
 	sb.WriteString("</speak>")
 
 	return sb.String()
